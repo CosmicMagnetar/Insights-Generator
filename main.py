@@ -5,7 +5,6 @@ from fpdf import FPDF
 import requests
 import re
 
-# === Argument Parsing ===
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate insights from a sales call audio file.")
     parser.add_argument('audio_file', type=str, help="Path to the audio file (e.g., 'audio/sales-call.mp3')")
@@ -15,14 +14,12 @@ def parse_args():
 
 args = parse_args()
 
-# Set API keys
 aai.settings.api_key = args.assemblyai_api_key or os.getenv("ASSEMBLYAI_API_KEY")
 OPENROUTER_API_KEY = args.openrouter_api_key or os.getenv("OPENROUTER_API_KEY")
 
 if not aai.settings.api_key or not OPENROUTER_API_KEY:
     raise RuntimeError("Both AssemblyAI and OpenRouter API keys are required.")
 
-# === Transcribe with AssemblyAI ===
 audio_url = args.audio_file
 
 config = aai.TranscriptionConfig(speech_model=aai.SpeechModel.best)
@@ -33,13 +30,11 @@ if transcript.status == "error":
 
 transcript_text = transcript.text
 
-# === Clean Text Utility ===
 def clean_text(text):
     text = re.sub(r'[\*"]', '', text).strip()
     text = text.replace("•", "-")
     return text
 
-# === Use OpenRouter (LLama 3 70B) to generate insight ===
 def generate_insight(prompt: str) -> str:
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -59,7 +54,6 @@ def generate_insight(prompt: str) -> str:
 
     return clean_text(response.json()['choices'][0]['message']['content'])
 
-# === Prompts ===
 summary_prompt = f"""
 You are a professional sales analyst. Provide a bullet-point summary of the call covering:
 
@@ -116,13 +110,11 @@ Transcript:
 {transcript_text}
 """
 
-# === Generate Insights ===
 summary = generate_insight(summary_prompt)
 discussion_points = generate_insight(discussion_prompt)
 objections = generate_insight(objections_prompt)
 actions = generate_insight(actions_prompt)
 
-# === PDF Generation ===
 pdf = FPDF()
 pdf.set_auto_page_break(auto=True, margin=15)
 pdf.add_page()
