@@ -5,7 +5,6 @@ from fpdf import FPDF
 import anthropic
 import re
 
-# === Argument Parsing ===
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate insights from a sales call audio file.")
     parser.add_argument('audio_file', type=str, help="Path to the audio file (e.g., 'audio/How-to-Overcome-the-Price-Objection.mp3')")
@@ -15,15 +14,13 @@ def parse_args():
 
 args = parse_args()
 
-# Set API keys from arguments or environment
 aai.settings.api_key = args.assemblyai_api_key or os.getenv("ASSEMBLYAI_API_KEY")
 client = anthropic.Anthropic(api_key=args.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY"))
 
 if not aai.settings.api_key or not client.api_key:
     raise RuntimeError("Both AssemblyAI and Anthropic API keys are required. Set them with --assemblyai_api_key or --anthropic_api_key or in your environment.")
 
-# === AssemblyAI Setup ===
-audio_url = args.audio_file  # Use the provided audio file path
+audio_url = args.audio_file
 
 config = aai.TranscriptionConfig(speech_model=aai.SpeechModel.best)
 transcript = aai.Transcriber(config=config).transcribe(audio_url)
@@ -33,10 +30,9 @@ if transcript.status == "error":
 
 transcript_text = transcript.text
 
-# === Anthropic Setup ===
 def clean_text(text):
     text = re.sub(r'[\*"]', '', text).strip()
-    text = text.replace("•", "-")  # Convert bullets to hyphens
+    text = text.replace("•", "-")  
     return text
 
 def generate_insight(prompt: str) -> str:
@@ -48,7 +44,6 @@ def generate_insight(prompt: str) -> str:
     )
     return clean_text(response.content[0].text.strip())
 
-# === Prompts ===
 summary_prompt = f"""
 You are a professional sales analyst. Provide a bullet-point summary of the call covering:
 
@@ -105,13 +100,11 @@ Transcript:
 {transcript_text}
 """
 
-# === Generate Insights ===
 summary = generate_insight(summary_prompt)
 discussion_points = generate_insight(discussion_prompt)
 objections = generate_insight(objections_prompt)
 actions = generate_insight(actions_prompt)
 
-# === PDF Generation ===
 pdf = FPDF()
 pdf.set_auto_page_break(auto=True, margin=15)
 pdf.add_page()
