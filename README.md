@@ -13,8 +13,8 @@ This project allows you to generate insights from a sales call audio file using 
 1. **Clone the repository** (if you’re using Git):
 
     ```bash
-    git clone https://github.com/your-repo/sales-call-insights.git
-    cd sales-call-insights
+    git clone https://github.com/CosmicMagnetar/Insights-Generator.git
+    cd Insights-Generator
     ```
 
 2. **Install required Python packages** using `pip`:
