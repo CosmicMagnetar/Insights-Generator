@@ -2,24 +2,27 @@ import argparse
 import os
 import assemblyai as aai
 from fpdf import FPDF
-import anthropic
+import requests
 import re
 
+# === Argument Parsing ===
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate insights from a sales call audio file.")
-    parser.add_argument('audio_file', type=str, help="Path to the audio file (e.g., 'audio/How-to-Overcome-the-Price-Objection.mp3')")
+    parser.add_argument('audio_file', type=str, help="Path to the audio file (e.g., 'audio/sales-call.mp3')")
     parser.add_argument('--assemblyai_api_key', type=str, help="AssemblyAI API Key")
-    parser.add_argument('--anthropic_api_key', type=str, help="Anthropic API Key")
+    parser.add_argument('--openrouter_api_key', type=str, help="OpenRouter API Key")
     return parser.parse_args()
 
 args = parse_args()
 
+# Set API keys
 aai.settings.api_key = args.assemblyai_api_key or os.getenv("ASSEMBLYAI_API_KEY")
-client = anthropic.Anthropic(api_key=args.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY"))
+OPENROUTER_API_KEY = args.openrouter_api_key or os.getenv("OPENROUTER_API_KEY")
 
-if not aai.settings.api_key or not client.api_key:
-    raise RuntimeError("Both AssemblyAI and Anthropic API keys are required. Set them with --assemblyai_api_key or --anthropic_api_key or in your environment.")
+if not aai.settings.api_key or not OPENROUTER_API_KEY:
+    raise RuntimeError("Both AssemblyAI and OpenRouter API keys are required.")
 
+# === Transcribe with AssemblyAI ===
 audio_url = args.audio_file
 
 config = aai.TranscriptionConfig(speech_model=aai.SpeechModel.best)
@@ -30,20 +33,33 @@ if transcript.status == "error":
 
 transcript_text = transcript.text
 
+# === Clean Text Utility ===
 def clean_text(text):
     text = re.sub(r'[\*"]', '', text).strip()
-    text = text.replace("•", "-")  
+    text = text.replace("•", "-")
     return text
 
+# === Use OpenRouter (LLama 3 70B) to generate insight ===
 def generate_insight(prompt: str) -> str:
-    response = client.messages.create(
-        model="claude-3-opus-20240229",
-        max_tokens=1024,
-        temperature=0.7,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return clean_text(response.content[0].text.strip())
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json"
+    }
 
+    payload = {
+        "model": "meta-llama/llama-3-70b-instruct",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.7,
+        "max_tokens": 1024
+    }
+
+    response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+    if response.status_code != 200:
+        raise RuntimeError(f"OpenRouter API Error {response.status_code}: {response.text}")
+
+    return clean_text(response.json()['choices'][0]['message']['content'])
+
+# === Prompts ===
 summary_prompt = f"""
 You are a professional sales analyst. Provide a bullet-point summary of the call covering:
 
@@ -100,11 +116,13 @@ Transcript:
 {transcript_text}
 """
 
+# === Generate Insights ===
 summary = generate_insight(summary_prompt)
 discussion_points = generate_insight(discussion_prompt)
 objections = generate_insight(objections_prompt)
 actions = generate_insight(actions_prompt)
 
+# === PDF Generation ===
 pdf = FPDF()
 pdf.set_auto_page_break(auto=True, margin=15)
 pdf.add_page()
